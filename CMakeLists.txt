@@ -22,9 +22,11 @@ endif()
 
 pybind11_add_module(vd_selectors
   src/bindings.cpp
+  src/vd_base.cpp
   src/vd_lars.cpp
   src/vd_omp.cpp
   src/vd_afs.cpp
+  src/trex.cpp
 )
 
 target_compile_features(vd_selectors PRIVATE cxx_std_17)

@@ -14,3 +14,8 @@ dev = ["pytest", "scipy"]
 
 [tool.scikit-build]
 cmake.build-type = "Release"
+
+[tool.pytest.ini_options]
+markers = [
+  "memory: memory-usage smoke tests",
+]
