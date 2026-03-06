@@ -1,0 +1,16 @@
+[build-system]
+requires = ["scikit-build-core>=0.9", "pybind11>=2.12"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "vd-selectors"
+version = "0.1.0"
+description = "Virtual Dummy forward selectors (LARS, OMP) with FDR control"
+requires-python = ">=3.9"
+dependencies = ["numpy>=1.22"]
+
+[project.optional-dependencies]
+dev = ["pytest", "scipy"]
+
+[tool.scikit-build]
+cmake.build-type = "Release"
