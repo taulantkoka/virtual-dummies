@@ -30,7 +30,7 @@ void VD_Base::init_common_state_() {
   normx_        = Vec::Ones(p_);
 
   beta_       = Vec::Zero(p_);
-  beta_dummy_ = Vec::Zero(opt_.T_max);
+  beta_dummy_ = Vec::Zero(opt_.T_stop);
   mu_         = Vec::Zero(n_);
   residuals_  = y_;
 
@@ -68,8 +68,8 @@ void VD_Base::init_common_state_() {
   chol_factor_.resize(0, 0);
 
   // Realized dummies
-  X_realized_.setZero(n_, opt_.T_max);
-  corr_realized_.setZero(opt_.T_max);
+  X_realized_.setZero(n_, opt_.T_stop);
+  corr_realized_.setZero(opt_.T_stop);
   T_realized_ = 0;
 
   // Virtual-dummy pool
@@ -300,15 +300,17 @@ bool VD_Base::chol_append(MatC& R,
 
 // ---------- Full correlation refresh ----------
 void VD_Base::full_corr_refresh_() {
-  // Real features: corr = X^T r
-  vd_detail::gemv_Xt(X_, residuals_, corr_,
+  const Vec& s = score_direction_();
+
+  // Real features: corr = X^T s
+  vd_detail::gemv_Xt(X_, s, corr_,
       opt_.mmap_fd, opt_.mmap_block_cols, scratch_ptr_());
 
-  // Virtual dummies: vd_corr = A_k^T (E_k^T r)
+  // Virtual dummies: vd_corr = A_k^T (E_k^T s)
   const int nb = basis_size_();
   const int m_rows = std::min(nb, vd_rows_filled_);
   if (m_rows > 0 && L_ > 0) {
-    Vec basis_proj = basis_.leftCols(nb).transpose() * residuals_;
+    Vec basis_proj = basis_.leftCols(nb).transpose() * s;
     vd_corr_.noalias() =
         vd_proj_.topRows(m_rows).transpose() * basis_proj.head(m_rows);
     for (int d = 0; d < L_; ++d)
@@ -318,6 +320,16 @@ void VD_Base::full_corr_refresh_() {
   // Realized dummies
   if (T_realized_ > 0) {
     corr_realized_.head(T_realized_).noalias() =
-        X_realized_.leftCols(T_realized_).transpose() * residuals_;
+        X_realized_.leftCols(T_realized_).transpose() * s;
+  }
+}
+
+// ---------- Grow basis from score direction ----------
+void VD_Base::grow_basis_from_score_() {
+  const Vec& s = score_direction_();
+  if (auto vo = orthonormalize_(s)) {
+    basis_.col(basis_size_()) = *vo;
+    basis_indices_.push_back(VD_DUMMY_SENTINEL);  // generic: not a specific feature
+    update_virtual_dummies_();
   }
 }

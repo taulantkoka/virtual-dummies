@@ -28,7 +28,7 @@ using MapVec  = Eigen::Map<const Vec>;
 enum class VDDummyLaw : uint8_t { Spherical = 0, Gaussian = 1 };
 
 struct VDOptions {
-  int    T_max       = 100;
+  int    T_stop       = 100;
   int    max_vd_proj = 100;
   double eps         = 1e-12;
   bool   standardize = false;

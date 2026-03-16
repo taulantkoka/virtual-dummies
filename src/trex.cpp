@@ -23,9 +23,9 @@ std::vector<unsigned long long> TRexSelector::make_seeds_(int K) const {
 // VDOptions factory
 // ========================================================================
 VDOptions TRexSelector::make_vd_opts_(unsigned long long seed,
-                                      int T_max, int n) const {
+                                      int T_stop, int n) const {
   VDOptions o;
-  o.T_max       = T_max;
+  o.T_stop       = T_stop;
   o.max_vd_proj = std::min(n, (opt_.max_vd_proj > 0 ? opt_.max_vd_proj
                                                      : std::max(32, n)));
   o.eps         = opt_.eps;
@@ -44,9 +44,9 @@ VDOptions TRexSelector::make_vd_opts_(unsigned long long seed,
 std::unique_ptr<VD_Base> TRexSelector::make_solver_(
     const Eigen::Ref<const MatC>& X,
     const Eigen::Ref<const Vec>& y,
-    int num_dummies, unsigned long long seed, int T_max) const
+    int num_dummies, unsigned long long seed, int T_stop) const
 {
-  VDOptions vd = make_vd_opts_(seed, T_max, (int)X.rows());
+  VDOptions vd = make_vd_opts_(seed, T_stop, (int)X.rows());
   switch (opt_.solver) {
     case SolverType::LARS:
       return std::make_unique<VD_LARS>(X, y, num_dummies, vd);
@@ -54,6 +54,8 @@ std::unique_ptr<VD_Base> TRexSelector::make_solver_(
       return std::make_unique<VD_OMP>(X, y, num_dummies, vd);
     case SolverType::AFS:
       return std::make_unique<VD_AFS>(X, y, num_dummies, vd);
+    case SolverType::AFS_Logistic:
+      return std::make_unique<VD_AFS_Logistic>(X, y, num_dummies, vd);
   }
   return std::make_unique<VD_LARS>(X, y, num_dummies, vd);
 }
@@ -175,11 +177,101 @@ TRexSelector::SelectResult TRexSelector::select_var_(
 }
 
 // ========================================================================
-// Posthoc mode: one parallel region, all K solvers run T_max independently
+// Posthoc mode: one parallel region, all K solvers run T_stop independently
+// ========================================================================
+// ========================================================================
+// Fixed-T mode: run K experiments to exactly T_fixed, sweep v only
+// ========================================================================
+TRexResult TRexSelector::run_fixed_T_(
+    const Eigen::Ref<const MatC>& X, const Eigen::Ref<const Vec>& y,
+    int T_fixed, int num_dummies, int n_threads, const Vec& V)
+{
+  const int p = (int)X.cols();
+  const int n_v = (int)V.size();
+
+  auto seeds = make_seeds_(opt_.K);
+
+  // Run K solvers to exactly T_fixed dummies
+  std::vector<std::unique_ptr<VD_Base>> solvers(opt_.K);
+  for (int k = 0; k < opt_.K; ++k)
+    solvers[k] = make_solver_(X, y, num_dummies, seeds[k], T_fixed);
+
+  Vec Phi = Vec::Zero(p);
+
+  #ifdef _OPENMP
+  #pragma omp parallel for num_threads(n_threads) schedule(dynamic)
+  #endif
+  for (int k = 0; k < opt_.K; ++k) {
+    solvers[k]->run(T_fixed);
+    Vec mask = Vec::Zero(p);
+    for (const auto& af : solvers[k]->active_features_copy()) {
+      if (af.kind == ActiveFeature::Kind::Real) {
+        int j = af.index;
+        if (j >= 0 && j < p) mask(j) = 1.0;
+      }
+    }
+    #ifdef _OPENMP
+    #pragma omp critical
+    #endif
+    Phi += mask;
+  }
+
+  solvers.clear();
+  Phi.array() /= double(opt_.K);
+
+  // Need phi_T_mat (p × T_fixed) for Phi_prime_fun_.
+  // We only have the final T, so construct a single-column version.
+  MatC phi_T_mat(p, 1);
+  phi_T_mat.col(0) = Phi;
+
+  Vec pp = Phi_prime_fun_(p, 1, num_dummies, phi_T_mat, Phi);
+  Vec fh = fdp_hat_(V, Phi, pp);
+
+  // Sweep v only: find largest R with FDP_hat ≤ α
+  double best_v = V(n_v - 1);
+  int best_R = 0;
+  int best_j = -1;
+
+  for (int j = 0; j < n_v; ++j) {
+    if (fh(j) > opt_.tFDR) continue;
+    int cnt = 0;
+    for (int i = 0; i < p; ++i)
+      if (Phi(i) > V(j)) ++cnt;
+    if (cnt > best_R || (cnt == best_R && j > best_j)) {
+      best_R = cnt; best_j = j; best_v = V(j);
+    }
+  }
+
+  std::vector<int> sel;
+  if (best_j >= 0) {
+    for (int i = 0; i < p; ++i)
+      if (Phi(i) > best_v) sel.push_back(i);
+  }
+
+  TRexResult out;
+  out.selected_var.resize((int)sel.size());
+  for (int k = 0; k < (int)sel.size(); ++k) out.selected_var(k) = sel[k];
+  out.v_thresh     = best_v;
+  out.T_stop       = T_fixed;
+  out.num_dummies  = num_dummies;
+  out.L_calibrated = num_dummies;
+  out.V            = V;
+  // Single-row FDP_hat and Phi_mat
+  out.FDP_hat_mat.resize(1, n_v);
+  out.FDP_hat_mat.row(0) = fh.transpose();
+  out.Phi_mat.resize(1, p);
+  out.Phi_mat.row(0) = Phi.transpose();
+  out.Phi_prime    = std::move(pp);
+  out.K            = opt_.K;
+  return out;
+}
+
+// ========================================================================
+// Posthoc mode: one parallel region, all K solvers run T_stop independently
 // ========================================================================
 TRexResult TRexSelector::run_posthoc_(
     const Eigen::Ref<const MatC>& X, const Eigen::Ref<const Vec>& y,
-    int Tmax, int num_dummies, int n_threads, const Vec& V)
+    int Tstop, int num_dummies, int n_threads, const Vec& V)
 {
   const int p = (int)X.cols();
   const int n_v = (int)V.size();
@@ -189,17 +281,17 @@ TRexResult TRexSelector::run_posthoc_(
   std::vector<std::unique_ptr<VD_Base>> solvers;
   solvers.reserve(opt_.K);
   for (int k = 0; k < opt_.K; ++k)
-    solvers.push_back(make_solver_(X, y, num_dummies, seeds[k], Tmax));
+    solvers.push_back(make_solver_(X, y, num_dummies, seeds[k], Tstop));
 
   std::vector<MatC> per_solver_phi(opt_.K);
   for (int k = 0; k < opt_.K; ++k)
-    per_solver_phi[k] = MatC::Zero(p, Tmax);
+    per_solver_phi[k] = MatC::Zero(p, Tstop);
 
   #ifdef _OPENMP
   #pragma omp parallel for num_threads(n_threads) schedule(dynamic)
   #endif
   for (int k = 0; k < opt_.K; ++k) {
-    for (int t = 1; t <= Tmax; ++t) {
+    for (int t = 1; t <= Tstop; ++t) {
       solvers[k]->run(t);
       for (const auto& af : solvers[k]->active_features_copy()) {
         if (af.kind == ActiveFeature::Kind::Real) {
@@ -212,30 +304,30 @@ TRexResult TRexSelector::run_posthoc_(
 
   solvers.clear();
 
-  MatC phi_T_mat = MatC::Zero(p, Tmax);
+  MatC phi_T_mat = MatC::Zero(p, Tstop);
   for (int k = 0; k < opt_.K; ++k) phi_T_mat += per_solver_phi[k];
   phi_T_mat.array() /= double(opt_.K);
   per_solver_phi.clear();
 
-  Eigen::MatrixXd FDP_hat_mat(Tmax, n_v);
-  Eigen::MatrixXd Phi_mat(Tmax, p);
+  Eigen::MatrixXd FDP_hat_mat(Tstop, n_v);
+  Eigen::MatrixXd Phi_mat(Tstop, p);
   Vec Phi_prime;
 
-  for (int t = 1; t <= Tmax; ++t) {
+  for (int t = 1; t <= Tstop; ++t) {
     Vec Phi_t = phi_T_mat.col(t - 1);
     Phi_mat.row(t - 1) = Phi_t.transpose();
     Vec pp = Phi_prime_fun_(p, t, num_dummies, phi_T_mat.leftCols(t), Phi_t);
     Vec fh = fdp_hat_(V, Phi_t, pp);
     FDP_hat_mat.row(t - 1) = fh.transpose();
-    if (t == Tmax) Phi_prime = std::move(pp);
+    if (t == Tstop) Phi_prime = std::move(pp);
   }
 
-  SelectResult sel = select_var_(p, opt_.tFDR, Tmax, FDP_hat_mat, Phi_mat, V);
+  SelectResult sel = select_var_(p, opt_.tFDR, Tstop, FDP_hat_mat, Phi_mat, V);
 
   TRexResult out;
   out.selected_var  = sel.selected_var;
   out.v_thresh      = sel.v_thresh;
-  out.T_stop        = Tmax;
+  out.T_stop        = Tstop;
   out.num_dummies   = num_dummies;
   out.L_calibrated  = num_dummies;
   out.V             = V;
@@ -251,7 +343,7 @@ TRexResult TRexSelector::run_posthoc_(
 // ========================================================================
 TRexResult TRexSelector::run_early_stop_(
     const Eigen::Ref<const MatC>& X, const Eigen::Ref<const Vec>& y,
-    int Tmax, int num_dummies, int n_threads, const Vec& V)
+    int Tstop, int num_dummies, int n_threads, const Vec& V)
 {
   const int p = (int)X.cols();
   const int n_v = (int)V.size();
@@ -262,13 +354,15 @@ TRexResult TRexSelector::run_early_stop_(
   std::vector<std::unique_ptr<VD_Base>> solvers;
   solvers.reserve(opt_.K);
   for (int k = 0; k < opt_.K; ++k)
-    solvers.push_back(make_solver_(X, y, num_dummies, seeds[k], Tmax));
+    solvers.push_back(make_solver_(X, y, num_dummies, seeds[k], Tstop));
 
-  MatC phi_T_mat = MatC::Zero(p, Tmax);
+  MatC phi_T_mat = MatC::Zero(p, Tstop);
   int T_stop = 0;
+  int stale_count = 0;
+  int prev_n_above = 0;
 
-  while (T_stop < Tmax) {
-    const int T_next = std::min(T_stop + SW, Tmax);
+  while (T_stop < Tstop) {
+    const int T_next = std::min(T_stop + SW, Tstop);
     const int steps  = T_next - T_stop;
 
     std::vector<MatC> local_masks(opt_.K);
@@ -304,11 +398,35 @@ TRexResult TRexSelector::run_early_stop_(
                             phi_T_mat.leftCols(T_stop), Phi_last);
     Vec fh = fdp_hat_(V, Phi_last, pp);
 
+    int n_above_half = 0;
+    for (int j = 0; j < p; ++j)
+      if (Phi_last(j) > 0.5) ++n_above_half;
+
     if (opt_.verbose)
       std::cout << "[TRex] T=" << T_stop
-                << " FDP_hat(max_v)=" << fh(n_v - 1) << "\n";
+                << " FDP_hat(max_v)=" << fh(n_v - 1)
+                << " n_real(Phi>0.5)=" << n_above_half << "\n";
 
+    // Primary stop: FDP exceeds target
     if (fh(n_v - 1) > opt_.tFDR) break;
+
+    // Dummy-burn stop: if the number of reals above the 0.5 voting
+    // threshold isn't growing, the experiments are only selecting
+    // dummies.  The FDP estimator is blind in this regime (R=0 or
+    // R=const → FDP_hat=0), so it will never trigger.
+    if (n_above_half <= prev_n_above) {
+      ++stale_count;
+      if (stale_count >= opt_.max_stale_strides) {
+        if (opt_.verbose)
+          std::cout << "[TRex] stopping: reals above 0.5 stuck at "
+                    << n_above_half << " for "
+                    << stale_count << " consecutive strides\n";
+        break;
+      }
+    } else {
+      stale_count = 0;
+    }
+    prev_n_above = n_above_half;
   }
 
   solvers.clear();
@@ -365,7 +483,7 @@ int TRexSelector::calibrate_L_(
     // Run K experiments at T=1
     std::vector<std::unique_ptr<VD_Base>> solvers(opt_.K);
     for (int k = 0; k < opt_.K; ++k)
-      solvers[k] = make_solver_(X, y, L, seeds[k], /*T_max=*/1);
+      solvers[k] = make_solver_(X, y, L, seeds[k], /*T_stop=*/1);
 
     MatC phi_sum = MatC::Zero(p, 1);
 
@@ -439,7 +557,7 @@ TRexResult TRexSelector::run(
   Vec V = make_V_(opt_.K, opt_.eps);
 
   if (opt_.verbose) {
-    const char* solver_names[] = {"LARS", "OMP", "AFS"};
+    const char* solver_names[] = {"LARS", "OMP", "AFS", "AFS_Logistic"};
     const char* calib_names[]  = {"FixedTL", "CalibrateT", "CalibrateL", "CalibrateBoth"};
     std::cout << "[TRex] p=" << p << " n=" << n
               << " K=" << opt_.K
@@ -463,17 +581,17 @@ TRexResult TRexSelector::run(
       break;
   }
 
-  // ---- Determine T_max ----
-  int Tmax;
+  // ---- Determine T_stop ----
+  int Tstop;
   if (opt_.T_stop > 0) {
-    Tmax = opt_.T_stop;
+    Tstop = opt_.T_stop;
   } else {
-    Tmax = std::min(num_dummies, (int)std::ceil(n / 2.0));
+    Tstop = std::min(num_dummies, (int)std::ceil(n / 2.0));
   }
 
   if (opt_.verbose)
     std::cout << "[TRex] using L=" << num_dummies
-              << " T_max=" << Tmax << "\n";
+              << " T_stop=" << Tstop << "\n";
 
   // ---- Dispatch ----
   TRexResult out;
@@ -481,17 +599,17 @@ TRexResult TRexSelector::run(
   switch (opt_.calib) {
     case CalibMode::FixedTL:
     case CalibMode::CalibrateL:
-      // Fixed T: always posthoc (no early stop needed)
-      out = run_posthoc_(X, y, Tmax, num_dummies, n_threads, V);
+      // Fixed T: run at exactly Tstop, sweep v only
+      out = run_fixed_T_(X, y, Tstop, num_dummies, n_threads, V);
       break;
 
     case CalibMode::CalibrateT:
     case CalibMode::CalibrateBoth:
       // Search over T: use posthoc or early-stop per user setting
       if (opt_.posthoc_mode)
-        out = run_posthoc_(X, y, Tmax, num_dummies, n_threads, V);
+        out = run_posthoc_(X, y, Tstop, num_dummies, n_threads, V);
       else
-        out = run_early_stop_(X, y, Tmax, num_dummies, n_threads, V);
+        out = run_early_stop_(X, y, Tstop, num_dummies, n_threads, V);
       break;
   }
 

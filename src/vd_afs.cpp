@@ -107,7 +107,7 @@ MatC VD_AFS::run(int T) {
   };
 
   if (step_ == 0) record();
-  const int max_steps = p_ + opt_.T_max;
+  const int max_steps = p_ + opt_.T_stop;
 
   for (int it = step_; it < max_steps; ++it) {
     const int prev = T_realized_;

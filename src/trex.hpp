@@ -14,6 +14,7 @@
 #include "vd_lars.hpp"
 #include "vd_omp.hpp"
 #include "vd_afs.hpp"
+#include "vd_afs_logistic.hpp"
 #include <memory>
 
 #ifdef _OPENMP
@@ -21,7 +22,7 @@
 #endif
 
 // ---------- Enums ----------
-enum class SolverType : uint8_t { LARS = 0, OMP = 1, AFS = 2 };
+enum class SolverType : uint8_t { LARS = 0, OMP = 1, AFS = 2, AFS_Logistic = 3 };
 enum class CalibMode  : uint8_t { FixedTL = 0, CalibrateT = 1, CalibrateL = 2, CalibrateBoth = 3 };
 
 // ---------- Options ----------
@@ -29,11 +30,12 @@ struct TRexOptions {
   double tFDR         = 0.2;
   int    K            = 20;        // number of random experiments
   int    L_factor     = 10;        // L = L_factor * p  (when L is fixed)
-  int    T_stop       = -1;        // fixed T; -1 = auto (min(L, n/2))
+  int    T_stop       = -1;        // -1 = auto (min(L, n/2)); >0 = explicit ceiling/fixed T
   int    max_L_factor = 50;        // ceiling for L calibration
 
   int    stride_width  = 1;        // steps between early-stop checks
   bool   posthoc_mode  = false;    // posthoc (no early stop) vs strided early-stop
+  int    max_stale_strides = 3;    // stop if no new reals enter for this many strides
   int    max_vd_proj   = 100;
   double eps           = 1e-12;
   bool   verbose       = true;
@@ -78,18 +80,22 @@ private:
   std::unique_ptr<VD_Base> make_solver_(
       const Eigen::Ref<const MatC>& X,
       const Eigen::Ref<const Vec>& y,
-      int num_dummies, unsigned long long seed, int T_max) const;
+      int num_dummies, unsigned long long seed, int T_stop) const;
 
-  VDOptions make_vd_opts_(unsigned long long seed, int T_max, int n) const;
+  VDOptions make_vd_opts_(unsigned long long seed, int T_stop, int n) const;
 
   // ---- Execution paths ----
+  TRexResult run_fixed_T_(
+      const Eigen::Ref<const MatC>& X, const Eigen::Ref<const Vec>& y,
+      int T_fixed, int num_dummies, int n_threads, const Vec& V);
+
   TRexResult run_posthoc_(
       const Eigen::Ref<const MatC>& X, const Eigen::Ref<const Vec>& y,
-      int Tmax, int num_dummies, int n_threads, const Vec& V);
+      int Tstop, int num_dummies, int n_threads, const Vec& V);
 
   TRexResult run_early_stop_(
       const Eigen::Ref<const MatC>& X, const Eigen::Ref<const Vec>& y,
-      int Tmax, int num_dummies, int n_threads, const Vec& V);
+      int Tstop, int num_dummies, int n_threads, const Vec& V);
 
   // ---- L calibration ----
   int calibrate_L_(

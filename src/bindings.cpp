@@ -6,6 +6,7 @@
 #include "vd_lars.hpp"
 #include "vd_omp.hpp"
 #include "vd_afs.hpp"
+#include "vd_afs_logistic.hpp"
 #include "trex.hpp"
 #include "memory_mapped_eigen_matrix.hpp"
 
@@ -73,7 +74,7 @@ PYBIND11_MODULE(vd_selectors, m) {
 
   py::class_<VDOptions>(m, "VDOptions")
     .def(py::init<>())
-    .def_readwrite("T_max",           &VDOptions::T_max)
+    .def_readwrite("T_stop",           &VDOptions::T_stop)
     .def_readwrite("max_vd_proj",     &VDOptions::max_vd_proj)
     .def_readwrite("eps",             &VDOptions::eps)
     .def_readwrite("standardize",     &VDOptions::standardize)
@@ -136,6 +137,19 @@ PYBIND11_MODULE(vd_selectors, m) {
   bind_common<VD_AFS>(afs);
 
   // ==================================================================
+  // VD_AFS_Logistic
+  // ==================================================================
+  auto afs_log = py::class_<VD_AFS_Logistic>(m, "VD_AFS_Logistic")
+    .def(py::init(&make_solver<VD_AFS_Logistic>),
+        py::arg("X"), py::arg("y"), py::arg("num_dummies"), py::arg("options"),
+        py::keep_alive<1,2>(), py::keep_alive<1,3>())
+    .def("run", [](VD_AFS_Logistic& self, int T) {
+          py::gil_scoped_release release;
+          return self.run(T);
+        }, py::arg("T") = 1);
+  bind_common<VD_AFS_Logistic>(afs_log);
+
+  // ==================================================================
   // MMapMatrix
   // ==================================================================
   using MMap = MemoryMappedEigenMatrix<double>;
@@ -192,6 +206,7 @@ PYBIND11_MODULE(vd_selectors, m) {
     .value("LARS", SolverType::LARS)
     .value("OMP",  SolverType::OMP)
     .value("AFS",  SolverType::AFS)
+    .value("AFS_Logistic", SolverType::AFS_Logistic)
     .export_values();
 
   py::enum_<CalibMode>(m, "CalibMode")
@@ -206,10 +221,11 @@ PYBIND11_MODULE(vd_selectors, m) {
     .def_readwrite("tFDR",           &TRexOptions::tFDR)
     .def_readwrite("K",              &TRexOptions::K)
     .def_readwrite("L_factor",       &TRexOptions::L_factor)
-    .def_readwrite("T_stop",         &TRexOptions::T_stop)
+    .def_readwrite("T_stop",          &TRexOptions::T_stop)
     .def_readwrite("max_L_factor",   &TRexOptions::max_L_factor)
     .def_readwrite("stride_width",   &TRexOptions::stride_width)
     .def_readwrite("posthoc_mode",   &TRexOptions::posthoc_mode)
+    .def_readwrite("max_stale_strides", &TRexOptions::max_stale_strides)
     .def_readwrite("max_vd_proj",    &TRexOptions::max_vd_proj)
     .def_readwrite("eps",            &TRexOptions::eps)
     .def_readwrite("verbose",        &TRexOptions::verbose)

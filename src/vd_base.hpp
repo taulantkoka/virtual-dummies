@@ -126,6 +126,29 @@ protected:
   void update_virtual_dummies_();
   void realize_dummy_(int vd_idx);
 
+  // ---------- Score direction (the hook for GLMs) ----------
+  //
+  // Returns the direction used for:
+  //   (a) growing the basis (orthonormalize this, not x_j)
+  //   (b) computing correlations (corr_ = X^T score, not X^T r)
+  //
+  // Default (OLS): returns residuals_ = y - X_A beta.
+  // GLM override:  returns score s_k = y - g(X_A beta_k).
+  //
+  // Called by grow_basis_and_refresh_() after each selection step.
+  //
+  virtual const Vec& score_direction_() const { return residuals_; }
+
+  // ---------- Combined basis growth + correlation refresh ----------
+  //
+  // After selecting a new feature (real or dummy), call this instead
+  // of manually calling orthonormalize_ + update_virtual_dummies_ +
+  // full_corr_refresh_ separately.  Uses score_direction_() to
+  // determine what enters the basis and what gets correlated.
+  //
+  void grow_basis_from_score_();
+  void full_corr_refresh_();    // corr_ = X^T score, vd_corr, corr_realized
+
   // ---------- Shared Cholesky ----------
   static bool chol_append(MatC& R,
                           const Eigen::Ref<const Vec>& v,
@@ -135,7 +158,6 @@ protected:
   double* scratch_ptr_() {
     return gemv_scratch_.empty() ? nullptr : gemv_scratch_.data();
   }
-  void full_corr_refresh_();    // corr_ = X^T r, vd_corr, corr_realized
 
 private:
   VD_Base(const VD_Base&) = delete;

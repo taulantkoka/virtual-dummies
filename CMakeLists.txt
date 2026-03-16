@@ -26,6 +26,7 @@ pybind11_add_module(vd_selectors
   src/vd_lars.cpp
   src/vd_omp.cpp
   src/vd_afs.cpp
+  src/vd_afs_logistic.cpp
   src/trex.cpp
 )
 
