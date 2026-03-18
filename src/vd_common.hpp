@@ -77,7 +77,7 @@ inline bool pread_full(int fd, void* buf, std::size_t len, off_t offset) {
 inline void advise_sequential(const void* ptr, std::size_t len) {
 #if !defined(_WIN32)
   if (ptr && len > 0)
-    ::madvise(const_cast<void*>(ptr), len, MADV_SEQUENTIAL);
+    ::madvise(const_cast<void*>(ptr), len, MADV_RANDOM);
 #else
   (void)ptr; (void)len;
 #endif

@@ -68,8 +68,8 @@ void VD_Base::init_common_state_() {
   chol_factor_.resize(0, 0);
 
   // Realized dummies
-  X_realized_.setZero(n_, opt_.T_stop);
-  corr_realized_.setZero(opt_.T_stop);
+  X_realized_.resize(n_, opt_.T_stop);
+  corr_realized_.resize(opt_.T_stop);
   T_realized_ = 0;
 
   // Virtual-dummy pool
