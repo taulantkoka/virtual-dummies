@@ -99,12 +99,39 @@ def generate_phenotype(
 
 
 def load_run_data(base_dir, run_id, snp_subsample=None, snp_seed=456):
-    path = Path(base_dir) / f"run_{run_id}" / "data.npz"
-    if not path.exists():
+    """Load data for phenotype generation. Supports mmap and npz paths."""
+    import json as _json
+
+    run_dir = Path(base_dir) / f"run_{run_id}"
+    meta_path = run_dir / "meta.json"
+    xstd_dat = run_dir / "X_std.dat"
+    xraw_dat = run_dir / "X_raw.dat"
+    npz_path = run_dir / "data.npz"
+
+    Xc = X_raw = None
+
+    # Path 1: mmap dat files
+    if xstd_dat.exists() and xraw_dat.exists() and meta_path.exists():
+        meta = _json.load(open(meta_path))
+        n, p = meta["n_samples"], meta["p_pruned_total"]
+        X_raw = np.memmap(xraw_dat, dtype="float64", mode="r", shape=(n, p), order="F")
+        Xc = np.memmap(xstd_dat, dtype="float64", mode="r", shape=(n, p), order="F")
+    elif xraw_dat.exists() and meta_path.exists():
+        meta = _json.load(open(meta_path))
+        n, p = meta["n_samples"], meta["p_pruned_total"]
+        X_raw = np.memmap(xraw_dat, dtype="float64", mode="r", shape=(n, p), order="F")
+        Xc = np.array(X_raw, dtype=np.float64, order="F")
+        Xc -= Xc.mean(axis=0, keepdims=True)
+        norms = np.linalg.norm(Xc, axis=0, keepdims=True)
+        norms[norms == 0] = 1.0
+        Xc /= norms
+    elif npz_path.exists():
+        d = np.load(npz_path)
+        Xc = np.asarray(d["X"], dtype=np.float64)
+        X_raw = np.asarray(d["X_raw"], dtype=np.float64)
+        d.close()
+    else:
         return None
-    d = np.load(path)
-    Xc = np.asarray(d["X"], dtype=np.float64)
-    X_raw = np.asarray(d["X_raw"], dtype=np.float64)
 
     if snp_subsample is not None:
         p = Xc.shape[1]
@@ -112,8 +139,8 @@ def load_run_data(base_dir, run_id, snp_subsample=None, snp_seed=456):
         if k < p:
             rng = np.random.default_rng(snp_seed + run_id * 100003)
             idx = np.sort(rng.choice(p, size=k, replace=False))
-            Xc = Xc[:, idx]
-            X_raw = X_raw[:, idx]
+            Xc = np.asarray(Xc[:, idx], dtype=np.float64)
+            X_raw = np.asarray(X_raw[:, idx], dtype=np.float64)
 
     return Xc, X_raw
 
@@ -150,7 +177,17 @@ def generate_all_phenotypes(data_dir, run_ids, cfg, pheno_dir, snp_subsample=Non
             het_rr_range=cfg["het_rr_range"],
         )
 
-        np.savez_compressed(pheno_path, y=y, causal_idx=causal_idx, seed=seed, n=n, p=p)
+        # Save phenotype + data. When subsampled, include Xc/X_raw so
+        # workers don't need to reload and re-subsample the full matrix.
+        save_dict = dict(y=y, causal_idx=causal_idx, seed=seed, n=n, p=p)
+        if snp_subsample is not None:
+            save_dict["Xc"] = np.asarray(Xc, dtype=np.float64)
+            save_dict["X_raw"] = np.asarray(X_raw, dtype=np.float64)
+            save_dict["subsampled"] = True
+        else:
+            save_dict["subsampled"] = False
+
+        np.savez_compressed(pheno_path, **save_dict)
         generated += 1
         del Xc, X_raw, y
 
@@ -388,6 +425,8 @@ def main():
     candidate_ids = sorted([
         i for i in range(1, n_runs + 1)
         if (Path(data_dir) / f"run_{i}" / "data.npz").exists()
+        or (Path(data_dir) / f"run_{i}" / "X_std.dat").exists()
+        or (Path(data_dir) / f"run_{i}" / "X_raw.dat").exists()
     ])
     run_ids, run_info = choose_run_subset(candidate_ids, run_subsample_arg, run_subsample_seed)
 

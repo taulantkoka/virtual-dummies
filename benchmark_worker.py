@@ -53,44 +53,122 @@ def fdr_tpp(selected, truth):
 
 
 # =============================================================
-# Data loading
+# Data loading (mmap/pread preferred, npz fallback)
 # =============================================================
 
 def load_data(data_dir, run_id, snp_subsample=None, snp_seed=456):
-    """Load preprocessed data (npz format)."""
-    path = Path(data_dir) / f"run_{run_id}" / "data.npz"
-    if not path.exists():
-        return None
-    d = np.load(path)
-    Xc = np.asarray(d["X"], dtype=np.float64)
-    X_raw = np.asarray(d["X_raw"], dtype=np.float64)
+    """
+    Load preprocessed data. Tries in order:
+      1. MMapMatrix (pread) — X_std.dat + X_raw.dat, near-zero RSS
+      2. np.memmap         — X_raw.dat only, standardize on fly
+      3. data.npz          — full load fallback
 
+    Returns (Xc, X_raw, mmap_fd, load_mode) or None.
+    mmap_fd >= 0 means pread is available for T-Rex.
+    """
+    import json as _json
+
+    run_dir = Path(data_dir) / f"run_{run_id}"
+    meta_path = run_dir / "meta.json"
+    xstd_dat = run_dir / "X_std.dat"
+    xraw_dat = run_dir / "X_raw.dat"
+    npz_path = run_dir / "data.npz"
+
+    _mm_holders = []  # keep MMapMatrix objects alive
+    mmap_fd = -1
+    load_mode = "npz"
+
+    # Path 1: MMapMatrix (pread) — zero-copy, minimal RSS
+    if xstd_dat.exists() and xraw_dat.exists() and meta_path.exists():
+        try:
+            from vd_selectors import MMapMatrix
+            meta = _json.load(open(meta_path))
+            n, p = meta["n_samples"], meta["p_pruned_total"]
+            mm_std = MMapMatrix(str(xstd_dat), n, p, writable=False)
+            mm_raw = MMapMatrix(str(xraw_dat), n, p, writable=False)
+            _mm_holders.extend([mm_std, mm_raw])
+            Xc = mm_std.as_array()
+            X_raw = mm_raw.as_array()
+            mmap_fd = mm_std.fileno()
+            load_mode = "pread"
+        except Exception as e:
+            log(f"MMapMatrix failed: {e}, trying memmap")
+            _mm_holders.clear()
+            mmap_fd = -1
+
+    # Path 2: memmap X_raw.dat only — standardize on the fly
+    if mmap_fd < 0 and xraw_dat.exists() and meta_path.exists():
+        try:
+            meta = _json.load(open(meta_path))
+            n, p = meta["n_samples"], meta["p_pruned_total"]
+            X_raw = np.memmap(xraw_dat, dtype="float64", mode="r", shape=(n, p), order="F")
+            Xc = np.array(X_raw, dtype=np.float64, order="F")
+            Xc -= Xc.mean(axis=0, keepdims=True)
+            norms = np.linalg.norm(Xc, axis=0, keepdims=True)
+            norms[norms == 0] = 1.0
+            Xc /= norms
+            load_mode = "memmap"
+        except Exception as e:
+            log(f"memmap failed: {e}, trying npz")
+
+    # Path 3: npz fallback
+    if load_mode == "npz":
+        if not npz_path.exists():
+            return None
+        d = np.load(npz_path)
+        Xc = np.asarray(d["X"], dtype=np.float64)
+        X_raw = np.asarray(d["X_raw"], dtype=np.float64)
+        d.close()
+
+    n, p = Xc.shape
+
+    # SNP subsampling — applies to ALL load modes
     if snp_subsample is not None:
-        p = Xc.shape[1]
         k = int(snp_subsample)
+        p = Xc.shape[1]
         if k < p:
             rng = np.random.default_rng(snp_seed + run_id * 100003)
             idx = np.sort(rng.choice(p, size=k, replace=False))
-            Xc = Xc[:, idx]
-            X_raw = X_raw[:, idx]
+            Xc = np.asarray(Xc[:, idx], dtype=np.float64).copy()
+            X_raw = np.asarray(X_raw[:, idx], dtype=np.float64).copy()
+            # pread fd refers to full matrix — invalid after subsample
+            mmap_fd = -1
+            _mm_holders.clear()
+            import gc; gc.collect()
 
-    return Xc, X_raw
+    return Xc, X_raw, mmap_fd, load_mode, _mm_holders
 
 
 def load_phenotype(pheno_dir, run_id):
-    """Load pre-generated phenotype."""
+    """
+    Load pre-generated phenotype.
+    If the pheno file contains subsampled Xc/X_raw (from Phase 0),
+    return those too so the worker doesn't need to load from data_dir.
+
+    Returns (y, causal_idx, Xc_or_None, X_raw_or_None).
+    """
     path = Path(pheno_dir) / f"pheno_run_{run_id}.npz"
     if not path.exists():
         return None
     d = np.load(path)
-    return np.asarray(d["y"], dtype=np.float64), np.asarray(d["causal_idx"], dtype=int)
+    y = np.asarray(d["y"], dtype=np.float64)
+    causal_idx = np.asarray(d["causal_idx"], dtype=int)
+
+    Xc = None
+    X_raw = None
+    if "Xc" in d and "X_raw" in d:
+        Xc = np.asarray(d["Xc"], dtype=np.float64)
+        X_raw = np.asarray(d["X_raw"], dtype=np.float64)
+
+    d.close()
+    return y, causal_idx, Xc, X_raw
 
 
 # =============================================================
 # Method implementations
 # =============================================================
 
-def run_trex(Xc, y, cfg):
+def run_trex(Xc, y, cfg, mmap_fd=-1):
     from vd_selectors import (
         TRexSelector, TRexOptions, SolverType, CalibMode, VDDummyLaw,
     )
@@ -111,8 +189,19 @@ def run_trex(Xc, y, cfg):
     if "rho" in cfg:
         opt.rho = cfg["rho"]
 
+    # Enable pread if mmap is available
+    if mmap_fd >= 0:
+        opt.mmap_fd = mmap_fd
+        opt.mmap_block_cols = 512
+
     selector = TRexSelector(opt)
-    Xf = np.asfortranarray(Xc, dtype=np.float64)
+
+    # When using mmap, Xc is already F-order — no copy needed
+    if mmap_fd >= 0:
+        Xf = Xc
+    else:
+        Xf = np.asfortranarray(Xc, dtype=np.float64)
+
     res = selector.run(Xf, y)
     sel = np.asarray(res.selected_var, dtype=int)
     extra = {
@@ -231,11 +320,28 @@ def run_knockoff_knockpy(Xc, y, cfg):
         ksampler = "gaussian"
         ko_type = "model-X_Gaussian"
 
+    # knockpy auto-detects binary y and switches to logistic regression,
+    # which fails on centered binary phenotypes (values like -0.3, 0.7).
+    # Adding tiny noise ensures y is treated as continuous (lasso regression).
+    y_ko = y.copy()
+    if len(np.unique(y_ko)) <= 2:
+        y_ko = y_ko + np.random.RandomState(0).randn(n) * 1e-6
+
     kfilter = knockpy.KnockoffFilter(
         ksampler=ksampler,
         fstat="lasso",
     )
-    rej = kfilter.forward(X=Xc, y=y, fdr=cfg["alpha"])
+
+    # knockpy prints progress to stdout, which corrupts our JSON output.
+    # Redirect stdout → stderr during the call.
+    import io
+    old_stdout = sys.stdout
+    sys.stdout = sys.stderr
+    try:
+        rej = kfilter.forward(X=Xc, y=y_ko, fdr=cfg["alpha"])
+    finally:
+        sys.stdout = old_stdout
+
     sel = np.where(rej)[0].astype(int)
     return sel, {"ko_type": ko_type}
 
@@ -258,11 +364,11 @@ def _knockoff_threshold_plus(W, q):
 # =============================================================
 
 METHODS = {
-    "trex":        lambda Xc, X_raw, y, cfg: run_trex(Xc, y, cfg),
-    "bh":          lambda Xc, X_raw, y, cfg: run_bh(X_raw, y, cfg),
-    "by":          lambda Xc, X_raw, y, cfg: run_by(X_raw, y, cfg),
-    "ko_id":       lambda Xc, X_raw, y, cfg: run_knockoff_identity(Xc, y, cfg),
-    "ko_knockpy":  lambda Xc, X_raw, y, cfg: run_knockoff_knockpy(Xc, y, cfg),
+    "trex":        lambda Xc, X_raw, y, cfg, mmap_fd: run_trex(Xc, y, cfg, mmap_fd),
+    "bh":          lambda Xc, X_raw, y, cfg, mmap_fd: run_bh(X_raw, y, cfg),
+    "by":          lambda Xc, X_raw, y, cfg, mmap_fd: run_by(X_raw, y, cfg),
+    "ko_id":       lambda Xc, X_raw, y, cfg, mmap_fd: run_knockoff_identity(Xc, y, cfg),
+    "ko_knockpy":  lambda Xc, X_raw, y, cfg, mmap_fd: run_knockoff_knockpy(Xc, y, cfg),
 }
 
 
@@ -290,34 +396,42 @@ def main():
         log(f"Unknown method: {method}. Available: {list(METHODS.keys())}")
         sys.exit(1)
 
-    # Load data
-    loaded = load_data(data_dir, run_id, snp_subsample)
-    if loaded is None:
-        json.dump({"run": run_id, "method": method, "error": "data not found"}, sys.stdout)
-        sys.exit(0)
-    Xc, X_raw = loaded
-
-    # Load phenotype
+    # Load phenotype first — may contain bundled data from Phase 0
     pheno = load_phenotype(pheno_dir, run_id)
     if pheno is None:
         json.dump({"run": run_id, "method": method, "error": "phenotype not found"}, sys.stdout)
         sys.exit(0)
-    y, causal_idx = pheno
+    y, causal_idx, Xc_bundled, X_raw_bundled = pheno
+
+    # Use bundled data if available (subsampled in Phase 0),
+    # otherwise load from data_dir (full p, pread for T-Rex)
+    mmap_fd = -1
+    _mm_holders = []
+    if Xc_bundled is not None:
+        Xc = Xc_bundled
+        X_raw = X_raw_bundled
+        load_mode = "bundled"
+    else:
+        loaded = load_data(data_dir, run_id, snp_subsample=None)  # no subsample — use full p
+        if loaded is None:
+            json.dump({"run": run_id, "method": method, "error": "data not found"}, sys.stdout)
+            sys.exit(0)
+        Xc, X_raw, mmap_fd, load_mode, _mm_holders = loaded
 
     n, p = Xc.shape
-    log(f"run={run_id} method={method} n={n} p={p} s={len(causal_idx)}")
+    log(f"run={run_id} method={method} n={n} p={p} s={len(causal_idx)} load={load_mode}")
 
     # Run method
     t0 = time.perf_counter()
     try:
-        selected, extra = METHODS[method](Xc, X_raw, y, cfg)
+        selected, extra = METHODS[method](Xc, X_raw, y, cfg, mmap_fd)
     except Exception as e:
         dt = time.perf_counter() - t0
         result = {
             "run": run_id, "method": method,
             "error": str(e), "runtime_s": dt,
             "peak_rss_mb": get_peak_rss_mb(),
-            "n": n, "p": p,
+            "n": n, "p": p, "load_mode": load_mode,
         }
         json.dump(result, sys.stdout)
         sys.exit(0)
@@ -336,6 +450,7 @@ def main():
         "n": n,
         "p": p,
         "n_causal": len(causal_idx),
+        "load_mode": load_mode,
     }
     result.update(extra)
 
