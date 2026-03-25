@@ -1,0 +1,78 @@
+# --- macOS System Files ---
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# --- Python Virtual Environments ---
+.venv/
+venv/
+ENV/
+env/
+
+# --- C++ / Compiled Objects ---
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dylib
+*.dll
+*.exe
+*.out
+*.app
+
+# --- CMake / Build Systems ---
+# If you use scikit-build-core or raw CMake
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+cmake_install.cmake
+install_manifest.txt
+Makefile
+_deps/
+*.cmake
+_skbuild/
+
+# --- IDEs / Editors ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.settings/
+.pydevproject
+
+# --- Project Specific ---
+# Exclude the large HAPNEST raw data if generated locally
+experiments/hapnest/1_genotype_generation/*.bed
+experiments/hapnest/1_genotype_generation/*.bim
+experiments/hapnest/1_genotype_generation/*.fam
+*.dat
+*.log
