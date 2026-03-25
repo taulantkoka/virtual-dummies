@@ -35,6 +35,15 @@ venv/
 ENV/
 env/
 
+# --- Cython & Helper Build Artifacts ---
+# Ignore the generated C++ and all compiled artifacts
+**/helpers.cpp
+**/helpers.*
+
+# EXCEPT the actual source files
+!**/helpers.pyx
+!**/helpers.py
+
 # --- C++ / Compiled Objects ---
 *.o
 *.obj
@@ -48,7 +57,6 @@ env/
 *.app
 
 # --- CMake / Build Systems ---
-# If you use scikit-build-core or raw CMake
 CMakeCache.txt
 CMakeFiles/
 CMakeScripts/
@@ -69,10 +77,11 @@ _skbuild/
 .settings/
 .pydevproject
 
-# --- Project Specific ---
-# Exclude the large HAPNEST raw data if generated locally
+# --- Project Specific Data ---
+# Exclude large HAPNEST raw data and NumPy compressed archives
+*.npz
+*.dat
+*.log
 experiments/hapnest/1_genotype_generation/*.bed
 experiments/hapnest/1_genotype_generation/*.bim
 experiments/hapnest/1_genotype_generation/*.fam
-*.dat
-*.log
