@@ -291,7 +291,7 @@ See [`experiments/README.md`](experiments/README.md) for complete instructions o
 
 ## License
 
-MIT
+[![License: GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
 ## References
 
