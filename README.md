@@ -3,14 +3,7 @@
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License: GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
-C++ library with Python bindings for scalable FDR-controlled variable selection
-via virtual dummy features. Implements the VD-LARS, VD-OMP, VD-AFS, and
-VD-AFS-Logistic forward selectors, plus the T-Rex selector for automatic
-calibration.
-
-**Paper**: T. Koka, J. Machkour, M. Muma. *"Virtual Dummies: Enabling Scalable
-FDR-Controlled Variable Selection via Sequential Sampling of Null Features."*
-Submitted to JMLR, 2026.
+C++ library with Python bindings for scalable FDR-controlled variable selection via virtual dummy features. Implements the VD-LARS, VD-OMP, VD-AFS, and VD-AFS-Logistic forward selectors, plus the T-Rex selector for automatic calibration.
 
 ## Installation
 
@@ -20,9 +13,7 @@ cd virtual-dummies
 pip install .
 ```
 
-This builds the `vd_selectors` C++ extension via scikit-build-core + pybind11.
-Eigen headers are vendored in `extern/` (or fetched automatically). A
-system BLAS (OpenBLAS, MKL, or macOS Accelerate) is used if available.
+This builds the `vd_selectors` C++ extension via scikit-build-core + pybind11. Eigen headers are vendored in `extern/` (or fetched automatically). A system BLAS (OpenBLAS, MKL, or macOS Accelerate) is used if available.
 
 ### macOS with Xcode 17+
 

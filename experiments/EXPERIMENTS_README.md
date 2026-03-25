@@ -11,7 +11,7 @@ pip install -e .
 # 2. Install experiment dependencies
 pip install numpy scipy matplotlib joblib tqdm pandas
 
-# 3. (Optional) Build Cython helpers for faster AD-LARS (~5-10x speedup)
+# 3. Build Cython helpers for AD-LARS
 cd experiments/
 pip install cython
 python setup.py build_ext --inplace
