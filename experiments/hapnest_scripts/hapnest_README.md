@@ -247,3 +247,14 @@ Each benchmark run produces a JSON file:
 ```
 
 `benchmark_merge.py` aggregates these into `summary.csv` (Table 1).
+
+## References
+
+* **HAPNEST**: Wharrie, S., et al. (2023). HAPNEST: efficient, large-scale generation and evaluation of synthetic datasets of whole genome sequence data. *Bioinformatics*, 39(1).
+* **T-Rex Selector**: Machkour, J., Muma, M., & Palomar, D. P. (2025). The terminating-random experiments selector: Fast high-dimensional variable selection with false discovery rate control. *Signal Processing*, 231, 109894.
+* **BH Correction**: Benjamini, Y., & Hochberg, Y. (1995). Controlling the false discovery rate: a practical and powerful approach to multiple testing. *Journal of the Royal Statistical Society: Series B (Methodological)*.
+* **BY Correction**: Benjamini, Y., & Yekutieli, D. (2001). The control of the false discovery rate in multiple testing under dependency. *The Annals of Statistics*, 29(4).
+* **High-Dimensional Selective Inference (BH-HD/BY-HD)**: Barber, R. F., & Candès, E. J. (2019). A knockoff filter for high-dimensional selective inference. *The Annals of Statistics*, 47(5).
+* **Knockoff Filter**: Barber, R. F., & Candès, E. J. (2015). Controlling the false discovery rate via knockoffs. *The Annals of Statistics*, 43(5).
+* **Model-X Knockoffs**: Candès, E., Fan, Y., Janson, L., & Lv, J. (2018). Panning for Gold: 'Model-X' Knockoffs for High Dimensional Controlled Variable Selection. *Journal of the Royal Statistical Society: Series B (Statistical Methodology)*, 80(3).
+* **Powerful Knockoffs (knockpy)**: Spector, A., & Janson, L. (2022). Powerful knockoffs via minimizing reconstructability. *The Annals of Statistics*, 50(1).

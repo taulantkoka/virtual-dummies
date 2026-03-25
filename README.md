@@ -286,22 +286,29 @@ virtual-dummies/
 
 ## Reproducing Paper Experiments
 
-See [`experiments/README.md`](experiments/README.md) for complete instructions
-on reproducing Figures 3–7 and Table 1.
+See [`experiments/README.md`](experiments/README.md) for complete instructions on reproducing Figures 3–7 and Table 1.
 
-## Citation
-
-```bibtex
-@article{koka2026virtualdummies,
-  title={Virtual Dummies: Enabling Scalable {FDR}-Controlled Variable
-         Selection via Sequential Sampling of Null Features},
-  author={Koka, Taulant and Machkour, Jasin and Muma, Michael},
-  journal={Journal of Machine Learning Research},
-  year={2026},
-  note={Submitted}
-}
-```
 
 ## License
 
 MIT
+
+## References
+
+- **T-Rex Selector**: Machkour, J., Muma, M., & Palomar, D. P. (2025). The terminating-random experiments selector: Fast high-dimensional variable selection with false discovery rate control. *Signal Processing*, 231, 109894.
+- **LARS**: Efron, B., Hastie, T., Johnstone, I., & Tibshirani, R. (2004). Least angle regression. *The Annals of Statistics*, 32(2).
+- **OMP**: Pati, Y. C., Rezaiifar, R., & Krishnaprasad, P. S. (1993). Orthogonal matching pursuit: Recursive function approximation with applications to wavelet decomposition. *Proceedings of the 27th Asilomar Conference on Signals, Systems and Computers*.
+- **Adaptive Forward Stepwise (AFS)**: Zhang, I., & Tibshirani, R. (2026). Adaptive Forward Stepwise: A Method for High Sparsity Regression. *Journal of Machine Learning Research*, 27(35).
+  year={2026},
+
+## Citation
+
+If you use this software or the Virtual Dummy construction in your research, please cite:
+
+```bibtex
+@article{koka2026virtualdummies,
+  title={Virtual Dummies: Enabling Scalable {FDR}-Controlled Variable Selection via Sequential Sampling of Null Features},
+  author={Koka, Taulant and Machkour, Jasin and Muma, Michael},
+  journal={arXiv preprint arXiv:26XX.XXXXX},
+  year={2026},
+}
