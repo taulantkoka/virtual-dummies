@@ -1,7 +1,7 @@
 # Virtual Dummies for FDR-Controlled Variable Selection
 
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![License: GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
 C++ library with Python bindings for scalable FDR-controlled variable selection
 via virtual dummy features. Implements the VD-LARS, VD-OMP, VD-AFS, and
@@ -288,10 +288,6 @@ virtual-dummies/
 
 See [`experiments/README.md`](experiments/README.md) for complete instructions on reproducing Figures 3–7 and Table 1.
 
-
-## License
-
-[![License: GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
 ## References
 
