@@ -1,0 +1,12 @@
+{
+  "run_name": "fig7_memory_runtime_benchmarksignal_n1000",
+  "timestamp": "20260325_150259",
+  "N_FIXED": 1000,
+  "T_SELECT": 10,
+  "REPS": 100,
+  "BASE_SEED": 123,
+  "P_LIST": [1000, 10000, 50000],
+  "L_MULT": [1],
+  "VD_MEM_CAP_GB": null,
+  "TLARS_MEM_CAP_GB": 100
+}

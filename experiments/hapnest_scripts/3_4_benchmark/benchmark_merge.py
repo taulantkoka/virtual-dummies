@@ -41,6 +41,10 @@ def main():
         try:
             with open(jf) as f:
                 r = json.load(f)
+            # Derive method from filename: run_1_trex_mt.json -> trex_mt
+            parts = jf.stem.split("_", 2)  # ['run', '1', 'trex_mt']
+            if len(parts) >= 3:
+                r["method"] = parts[2]
             all_rows.append(r)
         except Exception as e:
             print(f"  Warning: failed to load {jf}: {e}")
@@ -130,6 +134,17 @@ def main():
         ))
 
     print("=" * 120)
+
+    # Report empty/missing files
+    all_json = sorted(res_dir.glob("run_*_*.json"))
+    empty = [f for f in all_json if f.stat().st_size == 0]
+    if empty:
+        from collections import Counter
+        empty_methods = Counter("_".join(f.stem.split("_")[2:]) for f in empty)
+        print(f"\nEmpty/incomplete files: {len(empty)} total")
+        for m, cnt in sorted(empty_methods.items(), key=lambda x: -x[1]):
+            print(f"  {m}: {cnt} empty")
+
     pd.DataFrame(detail_rows).to_csv(results_dir / "summary.csv", index=False)
     print(f"Wrote summary.csv")
 

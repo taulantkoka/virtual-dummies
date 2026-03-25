@@ -33,24 +33,28 @@ static std::unique_ptr<Solver> make_solver(
 // Helper: bind common accessors on any VD solver (they all inherit from VD_Base)
 template <typename Cls, typename PyClass>
 static void bind_common(PyClass& c) {
-  c.def("basis_size",           &Cls::basis_size)
-   .def("num_dummies",          &Cls::num_dummies)
-   .def("num_realized_dummies", &Cls::num_realized_dummies)
-   .def("n_features",           &Cls::n_features)
-   .def("n_samples",            &Cls::n_samples)
-
-   .def("normx",    &Cls::normx_view,   py::return_value_policy::reference_internal)
-   .def("vd_proj",  &Cls::vd_proj_view, py::return_value_policy::reference_internal)
-   .def("vd_corr",  &Cls::vd_corr_view, py::return_value_policy::reference_internal)
-   .def("vd_stick", &Cls::vd_stick_view,py::return_value_policy::reference_internal)
-
-   .def("beta_view_copy",     &Cls::beta_view_copy)
-   .def("beta_real",          &Cls::beta_real)
-   .def("corr_view_copy",     &Cls::corr_view_copy)
-   .def("corr_realized_view", &Cls::corr_realized_view_copy)
-   .def("active_indices",     &Cls::active_indices)
-   .def("is_dummy_realized",  &Cls::is_dummy_realized_view)
-
+  c.def("basis_size",           [](const Cls& s) { return s.basis_size(); })
+   .def("num_dummies",          [](const Cls& s) { return s.num_dummies(); })
+   .def("num_realized_dummies", [](const Cls& s) { return s.num_realized_dummies(); })
+   .def("n_features",           [](const Cls& s) { return s.n_features(); })
+   .def("n_samples",            [](const Cls& s) { return s.n_samples(); })
+ 
+   .def("normx",    [](Cls& s) -> const Vec&  { return s.normx_view(); },
+        py::return_value_policy::reference_internal)
+   .def("vd_proj",  [](Cls& s) -> const MatR& { return s.vd_proj_view(); },
+        py::return_value_policy::reference_internal)
+   .def("vd_corr",  [](Cls& s) -> const Vec&  { return s.vd_corr_view(); },
+        py::return_value_policy::reference_internal)
+   .def("vd_stick", [](Cls& s) -> const Vec&  { return s.vd_stick_view(); },
+        py::return_value_policy::reference_internal)
+ 
+   .def("beta_view_copy",     [](const Cls& s) { return s.beta_view_copy(); })
+   .def("beta_real",          [](const Cls& s) { return s.beta_real(); })
+   .def("corr_view_copy",     [](const Cls& s) { return s.corr_view_copy(); })
+   .def("corr_realized_view", [](const Cls& s) { return s.corr_realized_view_copy(); })
+   .def("active_indices",     [](const Cls& s) { return s.active_indices(); })
+   .def("is_dummy_realized",  [](const Cls& s) { return s.is_dummy_realized_view(); })
+ 
    .def("active_features", [](const Cls& self) {
        py::list out;
        for (const auto& af : self.active_features_copy()) {
@@ -61,6 +65,7 @@ static void bind_common(PyClass& c) {
        return out;
    });
 }
+ 
 
 PYBIND11_MODULE(vd_selectors, m) {
 

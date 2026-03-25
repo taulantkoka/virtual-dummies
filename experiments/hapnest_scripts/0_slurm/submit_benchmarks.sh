@@ -1,14 +1,14 @@
 #!/bin/bash
 # submit_benchmarks.sh — HAPNEST multi-scale benchmark
-set -e
+# set -e
 
-SCRATCH=/work/scratch/tk33sawa/hapnest_mc
-DATA_SMALL=${SCRATCH}/data_preprocessed_small
-DATA_LARGE=${SCRATCH}/preprocessed
+SCRATCH=/work/scratch/USER_ID/hapnest_mc
+DATA_SMALL=${SCRATCH}_small/preprocessed
+DATA_LARGE=${SCRATCH}_full/preprocessed
 SCRIPTS=~/VirtualDummyForwardSelection
 LOGS=${SCRATCH}/logs
 RESULTS=${SCRATCH}/benchmark_results
-ACCOUNT=p0020087
+ACCOUNT= project_id
 
 mkdir -p $LOGS $RESULTS
 
@@ -97,7 +97,8 @@ METAEOF
         --wrap="
 eval \"\$(\$HOME/miniconda3/bin/conda shell.bash hook)\"
 conda activate trex
-export LD_LIBRARY_PATH=/shared/apps/.gcc/11.2/openblas/0.3.18/lib:/shared/apps/.gcc/11.2.0/lib64:$LD_LIBRARY_PATH
+export LD_PRELOAD=$CONDA_PREFIX/lib/libjemalloc.so
+module load gcc/11.2.0 openblas/0.3.18
 export OMP_NUM_THREADS=1
 cd ${SCRIPTS}
 python generate_phenotype.py ${DATA_DIR} ${PHENO_DIR} \${SLURM_ARRAY_TASK_ID} ${PHENO} '${CFG}'
@@ -125,7 +126,8 @@ python generate_phenotype.py ${DATA_DIR} ${PHENO_DIR} \${SLURM_ARRAY_TASK_ID} ${
         --wrap="
 eval \"\$(\$HOME/miniconda3/bin/conda shell.bash hook)\"
 conda activate trex
-export LD_LIBRARY_PATH=/shared/apps/.gcc/11.2/openblas/0.3.18/lib:/shared/apps/.gcc/11.2.0/lib64:$LD_LIBRARY_PATH
+export LD_PRELOAD=$CONDA_PREFIX/lib/libjemalloc.so
+module load gcc/11.2.0 openblas/0.3.18
 export OMP_NUM_THREADS=1
 
 N_METHODS=${N_METHODS}

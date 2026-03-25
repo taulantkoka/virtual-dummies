@@ -33,25 +33,9 @@ def generate_phenotype(
 ):
     n, p = Xc.shape
     s = len(causal_idx)
-    beta = np.zeros(p)
-    beta[causal_idx] = rng.choice([-1.0, 1.0], size=s)
-    signal = Xc @ beta
-    sig_var = max(float(np.var(signal)), 1e-20)
 
-    if h2 >= 1.0:
-        noise = np.zeros(n)
-    else:
-        noise_var = sig_var * (1.0 - h2) / h2
-        noise = np.sqrt(noise_var) * rng.standard_normal(n)
-
-    liability = signal + noise
-
-    if pheno_model == "linear":
-        y = liability.copy()
-    elif pheno_model == "liability_binary":
-        threshold = np.percentile(liability, 100.0 * (1.0 - prevalence))
-        y = (liability >= threshold).astype(np.float64)
-    elif pheno_model == "multiplicative_rr":
+    if pheno_model == "multiplicative_rr":
+        # Only needs X_raw[:, causal_idx] — skip full Xc @ beta
         risk_allele = rng.integers(0, 2, size=s)
         het_rr = rng.uniform(het_rr_range[0], het_rr_range[1], size=s)
         hom_rr = het_rr ** 2
