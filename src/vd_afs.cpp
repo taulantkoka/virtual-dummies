@@ -13,11 +13,6 @@ void VD_AFS::init_afs_() {
 std::optional<VD_AFS::Candidate> VD_AFS::find_best_candidate_() const {
   Candidate best{Candidate::Pool::Real, -1, 0.0, true};
 
-  // All reals (active + inactive)
-  for (int j = 0; j < p_; ++j) {
-    double ac = std::abs(corr_(j));
-    if (ac > best.abs_corr) best = {Candidate::Pool::Real, j, ac, !is_active_[j]};
-  }
   // Unrealized VD
   for (int d = 0; d < L_; ++d) {
     if (vd_is_realized_[d]) continue;
@@ -30,7 +25,11 @@ std::optional<VD_AFS::Candidate> VD_AFS::find_best_candidate_() const {
     if (ac > best.abs_corr)
       best = {Candidate::Pool::RealizedDummy, j, ac, false};
   }
-
+  // All reals (active + inactive)
+  for (int j = 0; j < p_; ++j) {
+    double ac = std::abs(corr_(j));
+    if (ac > best.abs_corr) best = {Candidate::Pool::Real, j, ac, !is_active_[j]};
+  }
   if (best.index < 0 || best.abs_corr < 100.0*opt_.eps)
     return std::nullopt;
   return best;

@@ -10,16 +10,13 @@ void VD_OMP::init_omp_() {
 std::optional<VD_OMP::Candidate> VD_OMP::find_best_candidate_() const {
   Candidate best{Candidate::Pool::Real, -1, 0.0};
 
-  for (int j = 0; j < p_; ++j) {
-    if (is_active_[j]) continue;
-    double ac = std::abs(corr_(j));
-    if (ac > best.abs_corr) best = {Candidate::Pool::Real, j, ac};
-  }
+  // Unrealized VD
   for (int d = 0; d < L_; ++d) {
     if (vd_is_realized_[d]) continue;
     double ac = std::abs(vd_corr_(d));
     if (ac > best.abs_corr) best = {Candidate::Pool::VD, d, ac};
   }
+  // Realized dummies (always active, can be re-selected)
   for (int j = 0; j < T_realized_; ++j) {
     bool already = false;
     for (const auto& af : active_features_)
@@ -29,7 +26,12 @@ std::optional<VD_OMP::Candidate> VD_OMP::find_best_candidate_() const {
     double ac = std::abs(corr_realized_(j));
     if (ac > best.abs_corr) best = {Candidate::Pool::Realized, j, ac};
   }
-
+  // All reals (active + inactive)
+  for (int j = 0; j < p_; ++j) {
+    if (is_active_[j]) continue;
+    double ac = std::abs(corr_(j));
+    if (ac > best.abs_corr) best = {Candidate::Pool::Real, j, ac};
+  }
   if (best.index < 0 || best.abs_corr < 100.0*opt_.eps)
     return std::nullopt;
   return best;

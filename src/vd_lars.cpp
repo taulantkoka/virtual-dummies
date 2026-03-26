@@ -229,7 +229,7 @@ double VD_LARS::take_step_(double C, double A_active,
     if (den2 > tol) { double t=(C+cj)/den2; if(t>tol&&t<gamma_vd){gamma_vd=t;idx_vd=d;} }
   }
 
-  bool winner_is_vd = (gamma_vd + tol < gamma_real);
+  bool winner_is_vd = (gamma_vd < gamma_real + tol);
   double gamma = winner_is_vd ? gamma_vd : gamma_real;
   if (!(gamma > opt_.eps)) return 0.0;
 

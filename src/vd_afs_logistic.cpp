@@ -51,19 +51,26 @@ std::optional<VD_AFS_Logistic::Candidate>
 VD_AFS_Logistic::find_best_candidate_() const {
   Candidate best{Candidate::Pool::Real, -1, 0.0, true};
 
-  for (int j = 0; j < p_; ++j) {
-    double ac = std::abs(corr_(j));
-    if (ac > best.abs_corr) best = {Candidate::Pool::Real, j, ac, !is_active_[j]};
-  }
+  // 1. Check Dummies first to be conservative
   for (int d = 0; d < L_; ++d) {
     if (vd_is_realized_[d]) continue;
     double ac = std::abs(vd_corr_(d));
     if (ac > best.abs_corr) best = {Candidate::Pool::VD, d, ac, true};
   }
+
+  // 2. Check Realized Dummies (also nulls)
   for (int j = 0; j < T_realized_; ++j) {
     double ac = std::abs(corr_realized_(j));
     if (ac > best.abs_corr)
       best = {Candidate::Pool::RealizedDummy, j, ac, false};
+  }
+
+  // 3. Check Real features LAST
+  // If a real feature has exactly the same correlation as a dummy, 
+  // the '>' will fail, and the dummy will remain the 'best'.
+  for (int j = 0; j < p_; ++j) {
+    double ac = std::abs(corr_(j));
+    if (ac > best.abs_corr) best = {Candidate::Pool::Real, j, ac, !is_active_[j]};
   }
 
   if (best.index < 0 || best.abs_corr < 100.0 * opt_.eps)
