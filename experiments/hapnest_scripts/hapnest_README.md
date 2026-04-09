@@ -55,19 +55,18 @@ hapnest/
 
 ## Data Availability
 
-Raw HAPNEST genotypes (PLINK format) are available at:
+Quality controlled HAPNEST genotypes (PLINK format) are available through Harvard Dataverse (https://dataverse.harvard.edu/dataverse/taulantkoka):
 
-    https://doi.org/10.5281/zenodo.XXXXXXX  (update with actual DOI)
-
-- Small-scale (Table 1a): 100 runs, chr 1, n=10,000 (~9 GB compressed)
+    https://doi.org/10.7910/DVN/RZ3FZT  (small-scale)
+    https://doi.org/10.7910/DVN/KQHP5C  (full-scale 1-10)
+    https://doi.org/10.7910/DVN/IJ4MVT  (full-scale 11-20)
+    https://doi.org/10.7910/DVN/MDOFTV  (full-scale 21-30)
 
 To preprocess after downloading:
 ```bash
 python 2_preprocessing/preprocess_hapnest_small.py <raw_dir> <out_dir> 100
 python 2_preprocessing/preprocess_hapnest_full.py <raw_dir> <out_dir> 30
 ```
-
-To regenerate all 30 full-scale runs from scratch, see "Full Regeneration" below.
 
 ## Quick Start (with downloaded raw data)
 

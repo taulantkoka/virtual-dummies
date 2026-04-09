@@ -1,0 +1,13 @@
+# Requirements for reproducing Figures 3-7
+# Install vd_selectors first: pip install -e .
+
+numpy>=1.22
+scipy>=1.9
+matplotlib>=3.5
+joblib>=1.2
+tqdm>=4.60
+pandas>=1.5
+
+# Optional: Cython for faster AD-LARS inner loop
+# Build with: cd experiments && python setup.py build_ext --inplace
+cython>=3.0
