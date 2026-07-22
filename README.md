@@ -295,7 +295,7 @@ If you use this software or the Virtual Dummy construction in your research, ple
 ```bibtex
 @article{koka2026virtualdummies,
   title={Virtual Dummies: Enabling Scalable {FDR}-Controlled Variable Selection via Sequential Sampling of Null Features},
-  author={Koka, Taulant and Machkour, Jasin and Muma, Michael},
+  author={Koka, Taulant and Machkour, Jasin and Palomar, Daniel and Muma, Michael},
   journal={arXiv preprint arXiv:26XX.XXXXX},
   year={2026},
 }
