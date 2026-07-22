@@ -8,7 +8,7 @@ C++ library with Python bindings for scalable FDR-controlled variable selection 
 ## Installation
 
 ```bash
-git clone https://github.com/taulokoka/virtual-dummies.git
+git clone https://github.com/taulantkoka/virtual-dummies.git
 cd virtual-dummies
 pip install .
 ```
